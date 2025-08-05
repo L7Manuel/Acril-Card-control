@@ -57,6 +57,8 @@ const LoyaltyCardSystem = () => {
         }
       } catch {
         console.warn('Clientes corruptos en localStorage');
+        // Si hay un error, inicializar con un array vacío
+        setCustomers([]);
       }
     }
     hasLoadedCustomers.current = true;
@@ -64,7 +66,11 @@ const LoyaltyCardSystem = () => {
 
   useEffect(() => {
     if (hasLoadedCustomers.current && customers.length > 0) {
-      localStorage.setItem('customers', JSON.stringify(customers));
+      try {
+        localStorage.setItem('customers', JSON.stringify(customers));
+      } catch (error) {
+        console.error('Error al guardar clientes en localStorage:', error);
+      }
     }
   }, [customers]);
 
@@ -264,14 +270,30 @@ useEffect(() => {
  }, [stampsPerReward, selectedCustomer, showNotification]);
 
  const deleteCustomer = useCallback((customerId) => {
-   if (window.confirm('¿Estás seguro de eliminar este cliente? Esta acción no se puede deshacer.')) {
-     setCustomers(prev => prev.filter(c => c.id !== customerId));
-     if (selectedCustomer?.id === customerId) {
-       setSelectedCustomer(null);
-     }
-     showNotification('Cliente eliminado');
-   }
- }, [selectedCustomer, showNotification]);
+  if (window.confirm('¿Estás seguro de eliminar este cliente? Esta acción no se puede deshacer.')) {
+    setLoading(true);
+    try {
+      // Primero filtramos los clientes
+      const updatedCustomers = customers.filter(c => c.id !== customerId);
+      
+      // Actualizamos el estado y el localStorage de inmediato
+      setCustomers(updatedCustomers);
+      localStorage.setItem('customers', JSON.stringify(updatedCustomers));
+      
+      // Limpiamos el cliente seleccionado si es el eliminado
+      if (selectedCustomer?.id === customerId) {
+        setSelectedCustomer(null);
+      }
+      
+      showNotification('Cliente eliminado exitosamente');
+    } catch (error) {
+      showNotification('Error al eliminar cliente', 'error');
+      console.error('Error al eliminar cliente:', error);
+    } finally {
+      setLoading(false);
+    }
+  }
+}, [customers, selectedCustomer, showNotification]);
 
  // Filtros optimizados
  const filteredCustomers = useMemo(() => {
@@ -388,7 +410,10 @@ useEffect(() => {
            <div className="flex items-center justify-between">
              <div className="flex items-center space-x-3">
                <Gift className="w-8 h-8" />
-               <h1 className="text-2xl font-bold">Sistema de Fidelización</h1>
+               <div className="text-center">
+                 <h1 className="text-3xl font-bold text-white">ACRILCARD</h1>
+                 <h2 className="text-xl text-white">Sistema de Fidelización</h2>
+               </div>
              </div>
              <div className="flex items-center space-x-4">
                <div className="text-sm">
