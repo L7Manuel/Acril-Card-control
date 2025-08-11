@@ -13,28 +13,42 @@ Sistema de gestión de tarjetas de fidelización digital que permite a los clien
 - **Sistema de Sellos**: Los clientes pueden acumular sellos en su tarjeta.
 - **Recompensas**: Configuración personalizable de sellos necesarios para canjear recompensas.
 - **Vista de Cliente**: Los clientes pueden ver su tarjeta y estado de recompensas.
+- **Manejo de Errores**: Sistema robusto para capturar y manejar errores de manera elegante.
+- **Notificaciones**: Retroalimentación al usuario mediante notificaciones contextuales.
 - **Responsive**: Diseño adaptativo que funciona en dispositivos móviles y de escritorio.
 
 ## Tecnologías Utilizadas
 
 - **Frontend**:
   - React 18
-  - Tailwind CSS (según se desprende de las clases utilizadas)
+  - React Router (para navegación)
+  - Tailwind CSS (para estilos)
   - Lucide React (para iconos)
-  - Vite (según la estructura del proyecto)
+  - Vite (entorno de desarrollo)
+  - Context API (para gestión de estado global)
 
 ## Estructura del Proyecto
 
 ```
 Acril-Card-control/
-├── public/           # Archivos estáticos
+├── public/                 # Archivos estáticos
 ├── src/
-│   ├── App.js        # Componente principal de la aplicación
-│   ├── CustomerLoyaltyCard.jsx  # Componente de tarjeta de fidelización
-│   ├── index.js      # Punto de entrada de la aplicación
-│   └── index.css     # Estilos globales
-├── package.json      # Dependencias y scripts
-└── README.md         # Documentación del proyecto
+│   ├── components/         # Componentes de la aplicación
+│   │   ├── common/         # Componentes reutilizables
+│   │   │   ├── Button.jsx  # Componente de botón personalizado
+│   │   │   ├── Input.jsx   # Componente de entrada personalizado
+│   │   │   └── ...
+│   │   └── test/           # Componentes para pruebas
+│   ├── contexts/           # Contextos de React
+│   │   └── NotificationContext.jsx  # Manejo global de notificaciones
+│   ├── pages/              # Páginas de la aplicación
+│   │   └── TestErrorHandling.jsx    # Página de pruebas de errores
+│   ├── App.js              # Componente principal de la aplicación
+│   ├── CustomerLoyaltyCard.jsx      # Componente de tarjeta de fidelización
+│   ├── index.js            # Punto de entrada de la aplicación
+│   └── index.css           # Estilos globales
+├── package.json            # Dependencias y scripts
+└── README.md               # Documentación del proyecto
 ```
 
 ## Instalación
@@ -97,6 +111,28 @@ Los datos de los clientes se guardan en el `localStorage` del navegador. Esto si
 - Los datos son específicos del navegador y dispositivo
 - Se pueden perder si el usuario borra los datos del navegador
 
+## Sistema de Manejo de Errores
+
+La aplicación incluye un sistema robusto de manejo de errores que incluye:
+
+- **Error Boundary**: Captura errores en los componentes y muestra una interfaz de error amigable.
+- **Notificaciones Contextuales**: Muestra mensajes de éxito, error, advertencia e información.
+- **Manejo de Errores Asíncronos**: Captura y maneja errores en operaciones asíncronas.
+
+### Características:
+
+- Interfaz de error amigable con opción de reintentar.
+- Notificaciones no intrusivas que desaparecen automáticamente.
+- Registro de errores en la consola para depuración.
+- Diseño responsivo en todos los dispositivos.
+
+### Acceso a Herramientas de Desarrollo
+
+Las herramientas de desarrollo están disponibles en:
+- `/test-errors` - Página de pruebas de errores
+
+> **Nota**: Estas herramientas están ocultas en la interfaz de usuario principal y solo son accesibles a través de la URL directa.
+
 ## Limitaciones
 - Los datos solo se almacenan localmente en el navegador
 - No hay autenticación de usuarios
@@ -117,9 +153,19 @@ Los datos de los clientes se guardan en el `localStorage` del navegador. Esto si
 4. Haz push a la rama (`git push origin feature/nueva-caracteristica`)
 5. Abre un Pull Request
 
-## Licencia
+  ## Licencia
 
-Este proyecto está bajo la Licencia MIT. Consulta el archivo `LICENSE` para más información.
+  La Licencia MIT es una licencia de software libre que permite a los usuarios
+  utilizar, modificar y distribuir el software de forma gratuita. Esta licencia
+  es compatible con muchos proyectos de código abierto y es una de las licencias
+  más populares en el desarrollo de software.
+
+  La Licencia MIT no impone restricciones sobre la forma en que se puede utilizar
+  el software, por lo que es una buena opción para proyectos que buscan ser
+  compatibles con una amplia variedad de entornos y tecnologías.
+
+  Para obtener más información sobre la Licencia MIT, consulta el archivo
+  `LICENSE` que se encuentra en la raíz de este proyecto.
 
 ---
 

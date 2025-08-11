@@ -1,13 +1,18 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useContext } from 'react';
 import { User, Gift, Plus, Search, Award, ShoppingBag, Calendar, Trash2, Copy, Star, X, AlertCircle } from 'lucide-react';
 
 // Importar componentes comunes
-import { InputField, Button, Notification } from './components/common';
+import { InputField, Button } from './components/common';
 
 // Importar componentes de la aplicación
 import CustomerLoyaltyCard from './components/CustomerLoyaltyCard';
 
+// Importar contexto de notificaciones
+import { NotificationProvider, NotificationContext } from './contexts/NotificationContext';
+
 const LoyaltyCardSystem = () => {
+  // Usar el contexto de notificaciones
+  const { showError, showSuccess } = useContext(NotificationContext);
  // Estados principales
  const [customers, setCustomers] = useState([]);
  
@@ -57,6 +62,7 @@ const LoyaltyCardSystem = () => {
         localStorage.setItem('customers', JSON.stringify(customers));
       } catch (error) {
         console.error('Error al guardar clientes en localStorage:', error);
+        showError('Error al guardar clientes en localStorage');
       }
     }
   }, [customers]);
@@ -165,13 +171,13 @@ useEffect(() => {
      setNewCustomer({ name: '', phone: '', cedula: '' });
      setErrors({});
      setShowAddCustomer(false);
-     showNotification(`Cliente agregado exitosamente. Código: ${customerCode}`);
+     showSuccess('Cliente agregado exitosamente');
    } catch (error) {
-     showNotification('Error al agregar cliente', 'error');
+     showError('Error al agregar cliente');
    } finally {
      setLoading(false);
    }
- }, [newCustomer, customers, generateCustomerCode, validateCustomer, showNotification]);
+ }, [newCustomer, customers, generateCustomerCode, validateCustomer]);
 
  const addStamp = useCallback((customerId, purchaseAmount = 0) => {
    setLoading(true);
@@ -207,13 +213,13 @@ useEffect(() => {
        return customer;
      }));
      
-     showNotification('Sello agregado exitosamente');
+     showSuccess('Sello agregado exitosamente');
    } catch (error) {
-     showNotification('Error al agregar sello', 'error');
+     showError('Error al agregar sello');
    } finally {
      setLoading(false);
    }
- }, [stampsPerReward, selectedCustomer, showNotification]);
+ }, [stampsPerReward, selectedCustomer]);
 
  const redeemReward = useCallback((customerId) => {
    setLoading(true);
@@ -236,13 +242,13 @@ useEffect(() => {
        return customer;
      }));
      
-     showNotification('Premio canjeado exitosamente');
+     showSuccess('Premio canjeado exitosamente');
    } catch (error) {
-     showNotification('Error al canjear premio', 'error');
+     showError('Error al canjear premio');
    } finally {
      setLoading(false);
    }
- }, [stampsPerReward, selectedCustomer, showNotification]);
+ }, [stampsPerReward, selectedCustomer]);
 
  const deleteCustomer = useCallback((customerId) => {
   if (window.confirm('¿Estás seguro de eliminar este cliente? Esta acción no se puede deshacer.')) {
@@ -260,15 +266,15 @@ useEffect(() => {
         setSelectedCustomer(null);
       }
       
-      showNotification('Cliente eliminado exitosamente');
+      showSuccess('Cliente eliminado exitosamente');
     } catch (error) {
-      showNotification('Error al eliminar cliente', 'error');
+      showError('Error al eliminar cliente');
       console.error('Error al eliminar cliente:', error);
     } finally {
       setLoading(false);
     }
   }
-}, [customers, selectedCustomer, showNotification]);
+}, [customers, selectedCustomer]);
 
  // Filtros optimizados
  const filteredCustomers = useMemo(() => {
@@ -292,11 +298,11 @@ useEffect(() => {
      const baseUrl = window.location.origin + window.location.pathname;
      const link = `${baseUrl}?customer=${customerCode}`;
      await navigator.clipboard.writeText(link);
-     showNotification('Enlace copiado al portapapeles');
+     showSuccess('Enlace copiado al portapapeles');
    } catch (error) {
-     showNotification('No se pudo copiar el enlace', 'error');
+     showError('No se pudo copiar el enlace');
    }
- }, [showNotification]);
+ }, [showSuccess, showError]);
 
  // Manejo de eventos de teclado para accesibilidad
  const handleKeyPress = useCallback((e, callback) => {
@@ -788,4 +794,40 @@ useEffect(() => {
  );
 };
 
-export default LoyaltyCardSystem;
+// Importar componentes de enrutamiento
+import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
+import TestErrorHandling from './pages/TestErrorHandling';
+
+// Componente de navegación simplificado
+const Navigation = () => (
+  <nav className="bg-gray-800 p-4">
+    <div className="max-w-7xl mx-auto px-4">
+      <div className="flex justify-center">
+        <Link to="/" className="text-white font-semibold text-xl">
+          AcrilCard - Sistema de Fidelización
+        </Link>
+      </div>
+    </div>
+  </nav>
+);
+
+// Envolver la aplicación con el NotificationProvider y el Router
+const App = () => {
+  return (
+    <Router>
+      <NotificationProvider>
+        <div className="min-h-screen bg-gray-100">
+          <Navigation />
+          <main>
+            <Routes>
+              <Route path="/test-errors" element={<TestErrorHandling />} />
+              <Route path="/" element={<LoyaltyCardSystem />} />
+            </Routes>
+          </main>
+        </div>
+      </NotificationProvider>
+    </Router>
+  );
+};
+
+export default App;

@@ -29,7 +29,14 @@ const iconVariants = {
   },
 };
 
-const Notification = ({ message, type = 'info', onClose, autoClose = true, autoCloseDuration = 3000 }) => {
+const Notification = ({ 
+  message, 
+  type = 'info', 
+  onClose, 
+  autoClose = true, 
+  autoCloseDuration = 5000,
+  position = 'top-right'
+}) => {
   useEffect(() => {
     if (autoClose && onClose) {
       const timer = setTimeout(() => {
@@ -43,14 +50,23 @@ const Notification = ({ message, type = 'info', onClose, autoClose = true, autoC
   if (!message) return null;
 
   const { icon, color, bgColor, borderColor } = iconVariants[type] || iconVariants.info;
+  
+  const positionClasses = {
+    'top-right': 'top-4 right-4',
+    'top-left': 'top-4 left-4',
+    'bottom-right': 'bottom-4 right-4',
+    'bottom-left': 'bottom-4 left-4',
+    'top-center': 'top-4 left-1/2 transform -translate-x-1/2',
+    'bottom-center': 'bottom-4 left-1/2 transform -translate-x-1/2',
+  };
 
   return (
     <div 
-      className={`fixed top-4 right-4 z-50 p-4 rounded-lg border ${bgColor} ${borderColor} shadow-lg max-w-sm w-full`}
+      className={`fixed z-50 p-4 rounded-lg border ${bgColor} ${borderColor} shadow-lg max-w-sm w-full ${positionClasses[position]}`}
       role="alert"
     >
       <div className="flex items-start">
-        <div className={`flex-shrink-0 ${color} mt-0.5`}>
+        <div className={`flex-shrink-0 ${color}`}>
           {icon}
         </div>
         <div className="ml-3 flex-1">
@@ -75,11 +91,14 @@ const Notification = ({ message, type = 'info', onClose, autoClose = true, autoC
 };
 
 Notification.propTypes = {
-  message: PropTypes.string,
+  message: PropTypes.string.isRequired,
   type: PropTypes.oneOf(['success', 'error', 'warning', 'info']),
   onClose: PropTypes.func,
   autoClose: PropTypes.bool,
   autoCloseDuration: PropTypes.number,
+  position: PropTypes.oneOf([
+    'top-right', 'top-left', 'bottom-right', 'bottom-left', 'top-center', 'bottom-center'
+  ]),
 };
 
 export default Notification;
