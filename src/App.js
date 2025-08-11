@@ -1,23 +1,11 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { User, Gift, Plus, Search, Award, ShoppingBag, Calendar, Trash2, Copy, Star, X, AlertCircle } from 'lucide-react';
 
-// Componente de campo de entrada con errores
-const InputField = ({ type = "text", placeholder, value, onChange, error, ...props }) => (
-  <div>
-    <input
-      type={type}
-      placeholder={placeholder}
-      value={value}
-      onChange={onChange}
-      className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-transparent ${
-        error ? 'border-red-500 bg-red-50' : 'border-gray-300'
-      }`}
-      {...props}
-    />
-    {error && <p className="text-red-500 text-xs mt-1">{error}</p>}
-  </div>
-);
+// Importar componentes comunes
+import { InputField, Button, Notification } from './components/common';
 
-import { User, Gift, Plus, Search, Award, ShoppingBag, Calendar, Trash2, Copy, Eye, Star, X, AlertCircle } from 'lucide-react';
+// Importar componentes de la aplicación
+import CustomerLoyaltyCard from './components/CustomerLoyaltyCard';
 
 const LoyaltyCardSystem = () => {
  // Estados principales
@@ -26,7 +14,6 @@ const LoyaltyCardSystem = () => {
  const [selectedCustomer, setSelectedCustomer] = useState(null);
  const [searchTerm, setSearchTerm] = useState('');
  const [showAddCustomer, setShowAddCustomer] = useState(false);
- const [showCustomerCard, setShowCustomerCard] = useState(false);
  const [newCustomer, setNewCustomer] = useState({ name: '', phone: '', cedula: '' });
  const [stampsPerReward, setStampsPerReward] = useState(10);
  const [currentView, setCurrentView] = useState('admin');
@@ -74,27 +61,15 @@ const LoyaltyCardSystem = () => {
     }
   }, [customers]);
 
- // Función para mostrar notificaciones
- const showNotification = useCallback((message, type = 'success') => {
-   setNotification({ message, type });
-   setTimeout(() => setNotification(null), 3000);
- }, []);
+  // Función para mostrar notificaciones
+  const showNotification = useCallback((message, type = 'success') => {
+    setNotification({ message, type });
+  }, []);
 
- // Componente de notificaciones
- const NotificationComponent = () => (
-   notification && (
-     <div className={`fixed top-4 right-4 p-4 rounded-lg shadow-lg z-50 transition-all duration-300 ${
-       notification.type === 'error' 
-         ? 'bg-red-500 text-white' 
-         : 'bg-green-500 text-white'
-     }`}>
-       <div className="flex items-center space-x-2">
-         {notification.type === 'error' && <AlertCircle className="w-5 h-5" />}
-         <span>{notification.message}</span>
-       </div>
-     </div>
-   )
- );
+  // Cerrar notificación
+  const closeNotification = useCallback(() => {
+    setNotification(null);
+  }, []);
 
  // Función mejorada para generar código único
  const generateCustomerCode = useCallback((cedula) => {
@@ -335,7 +310,7 @@ useEffect(() => {
  const CustomerLoyaltyCard = ({ customer }) => (
    <div className="bg-gradient-to-br from-red-800 to-yellow-600 p-6 rounded-2xl shadow-2xl text-white max-w-md mx-auto">
      <div className="text-center mb-6">
-       <h2 className="text-3xl font-extrabold tracking-wider mb-1">Acril-Card</h2>
+        <h2 className="text-3xl font-extrabold tracking-tight mb-1">ACRILCARD</h2>
         <h3 className="text-xl font-bold mb-2">{customer.name}</h3>
        <div className="bg-white/20 backdrop-blur-sm px-4 py-2 rounded-lg">
          <p className="text-sm opacity-90">Código de Cliente</p>
@@ -400,8 +375,14 @@ useEffect(() => {
 
  return (
    <div className="min-h-screen bg-gradient-to-br from-red-50 to-yellow-50 p-4">
-     {/* Componente de notificaciones */}
-     <NotificationComponent />
+     {/* Notificación */}
+     {notification && (
+       <Notification 
+         message={notification.message} 
+         type={notification.type} 
+         onClose={closeNotification}
+       />
+     )}
      
      <div className="max-w-6xl mx-auto">
        <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
@@ -409,10 +390,10 @@ useEffect(() => {
          <div className="bg-gradient-to-r from-red-800 to-yellow-600 text-white p-6">
            <div className="flex items-center justify-between">
              <div className="flex items-center space-x-3">
-               <Gift className="w-8 h-8" />
+               <Gift className="w-8 h-8 text-yellow-300" />
                <div className="text-center">
-                 <h1 className="text-3xl font-bold text-white">ACRILCARD</h1>
-                 <h2 className="text-xl text-white">Sistema de Fidelización</h2>
+                 <h1 className="text-3xl font-bold text-white tracking-wider">ACRILCARD</h1>
+                 <h2 className="text-lg text-yellow-100">Sistema de Fidelización</h2>
                </div>
              </div>
              <div className="flex items-center space-x-4">
@@ -422,7 +403,7 @@ useEffect(() => {
                    type="number"
                    value={stampsPerReward}
                    onChange={(e) => setStampsPerReward(Math.max(1, parseInt(e.target.value) || 10))}
-                   className="w-16 px-2 py-1 rounded text-black text-center"
+                   className="w-16 px-2 py-1 rounded text-black text-center border border-gray-300 focus:ring-2 focus:ring-yellow-500 focus:border-transparent"
                    min="1"
                    max="50"
                  />
@@ -439,25 +420,25 @@ useEffect(() => {
            <div className="lg:w-1/2 p-6 border-r border-gray-200">
              <div className="flex items-center justify-between mb-4">
                <h2 className="text-xl font-semibold text-gray-800">Clientes</h2>
-               <button
+               <Button
+                 variant="primary"
                  onClick={() => setShowAddCustomer(true)}
                  disabled={loading}
-                 className="bg-red-800 text-white px-4 py-2 rounded-lg flex items-center space-x-2 hover:bg-red-900 transition-colors disabled:opacity-50"
+                 className="flex items-center space-x-2"
                >
                  <Plus className="w-4 h-4" />
                  <span>Nuevo Cliente</span>
-               </button>
+               </Button>
              </div>
 
              {/* Búsqueda */}
-             <div className="relative mb-4">
-               <Search className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
-               <input
+             <div className="mb-4">
+               <InputField
                  type="text"
                  placeholder="Buscar por nombre, teléfono, cédula o código..."
                  value={searchTerm}
                  onChange={(e) => setSearchTerm(e.target.value)}
-                 className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-transparent"
+                 icon={<Search className="w-4 h-4 text-gray-400" />}
                />
              </div>
 
@@ -547,27 +528,24 @@ useEffect(() => {
                      </div>
                    </div>
                    <div className="flex space-x-2">
-                     <button
-                       onClick={() => setShowCustomerCard(true)}
-                       className="text-yellow-600 hover:text-yellow-700 p-2 rounded-lg hover:bg-yellow-50"
-                       title="Ver tarjeta del cliente"
-                     >
-                       <Eye className="w-5 h-5" />
-                     </button>
-                     <button
+                     <Button
+                       variant="icon"
                        onClick={() => copyCustomerLink(selectedCustomer.code)}
-                       className="text-blue-600 hover:text-blue-700 p-2 rounded-lg hover:bg-blue-50"
                        title="Copiar enlace del cliente"
+                       size="sm"
+                       className="text-blue-600 hover:bg-blue-50"
                      >
                        <Copy className="w-5 h-5" />
-                     </button>
-                     <button
+                     </Button>
+                     <Button
+                       variant="icon"
                        onClick={() => deleteCustomer(selectedCustomer.id)}
-                       className="text-red-500 hover:text-red-700 p-2 rounded-lg hover:bg-red-50"
                        title="Eliminar cliente"
+                       size="sm"
+                       className="text-red-500 hover:bg-red-50"
                      >
                        <Trash2 className="w-5 h-5" />
-                     </button>
+                     </Button>
                    </div>
                  </div>
 
@@ -610,42 +588,26 @@ useEffect(() => {
                      </div>
                    </div>
                  </div>
-                   {/* Enlace del Cliente */}
-                 <div className="bg-blue-50 p-4 rounded-lg border border-blue-200 mb-6">
-                   <div className="flex items-center justify-between">
-                     <div className="flex-1 mr-4">
-                       <h4 className="font-semibold text-blue-800 mb-1">Enlace del Cliente</h4>
-                       <p className="text-sm text-blue-600 break-all">
-                         {`${window.location.origin}${window.location.pathname}?customer=${selectedCustomer.code}`}
-                       </p>
-                     </div>
-                     <button
-                       onClick={() => copyCustomerLink(selectedCustomer.code)}
-                       className="bg-blue-500 text-white px-3 py-2 rounded-lg hover:bg-blue-600 flex items-center space-x-1 flex-shrink-0"
-                     >
-                       <Copy className="w-4 h-4" />
-                       <span>Copiar</span>
-                     </button>
-                   </div>
-                 </div>
 
                  {/* Acciones */}
                  <div className="flex space-x-3 mb-6">
-                   <button
+                   <Button
+                     variant="primary"
                      onClick={() => addStamp(selectedCustomer.id)}
-                     disabled={loading}
-                     className="flex-1 bg-red-800 text-white py-3 px-4 rounded-lg font-semibold hover:bg-red-900 transition-colors disabled:opacity-50"
+                     loading={loading}
+                     className="flex-1 py-3"
                    >
                      {loading ? 'Agregando...' : 'Agregar Sello'}
-                   </button>
+                   </Button>
                    {Math.floor(selectedCustomer.stamps / stampsPerReward) > 0 && (
-                     <button
+                     <Button
+                       variant="success"
                        onClick={() => redeemReward(selectedCustomer.id)}
-                       disabled={loading}
-                       className="flex-1 bg-green-600 text-white py-3 px-4 rounded-lg font-semibold hover:bg-green-700 transition-colors disabled:opacity-50"
+                       loading={loading}
+                       className="flex-1 py-3"
                      >
                        {loading ? 'Canjeando...' : 'Canjear Premio'}
-                     </button>
+                     </Button>
                    )}
                  </div>
 
@@ -695,7 +657,8 @@ useEffect(() => {
          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
            <div className="flex justify-between items-center mb-4">
              <h3 className="text-xl font-bold">Nuevo Cliente</h3>
-             <button
+             <Button
+               variant="icon"
                onClick={() => {
                  setShowAddCustomer(false);
                  setErrors({});
@@ -704,7 +667,7 @@ useEffect(() => {
                className="text-gray-500 hover:text-gray-700"
              >
                <X className="w-6 h-6" />
-             </button>
+             </Button>
            </div>
            
            <div className="space-y-4">
@@ -733,52 +696,26 @@ useEffect(() => {
              />
              
              <div className="flex space-x-3 pt-4">
-               <button
+               <Button
+                 variant="outline"
                  onClick={() => {
                    setShowAddCustomer(false);
                    setErrors({});
                    setNewCustomer({ name: '', phone: '', cedula: '' });
                  }}
-                 className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                 className="flex-1"
                >
                  Cancelar
-               </button>
-               <button
+               </Button>
+               <Button
+                 variant="primary"
                  onClick={addCustomer}
-                 disabled={loading}
-                 className="flex-1 bg-red-800 text-white px-4 py-2 rounded-lg hover:bg-red-900 transition-colors disabled:opacity-50"
+                 loading={loading}
+                 className="flex-1"
                >
                  {loading ? 'Agregando...' : 'Agregar Cliente'}
-               </button>
+               </Button>
              </div>
-           </div>
-         </div>
-       </div>
-        )}
-
-     {/* Modal para mostrar tarjeta del cliente */}
-     {showCustomerCard && selectedCustomer && (
-       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-         <div className="bg-white rounded-lg p-6 w-full max-w-lg mx-4">
-           <div className="flex justify-between items-center mb-4">
-             <h3 className="text-xl font-bold">Tarjeta de Fidelidad</h3>
-             <button
-               onClick={() => setShowCustomerCard(false)}
-               className="text-gray-500 hover:text-gray-700"
-             >
-               <X className="w-6 h-6" />
-             </button>
-           </div>
-           
-           <CustomerLoyaltyCard customer={selectedCustomer} />
-           
-           <div className="flex justify-center mt-6">
-             <button
-               onClick={() => setShowCustomerCard(false)}
-               className="px-6 py-2 bg-red-800 text-white rounded-lg hover:bg-red-900 transition-colors"
-             >
-               Cerrar
-             </button>
            </div>
          </div>
        </div>
@@ -786,26 +723,63 @@ useEffect(() => {
 
      {/* Vista del cliente */}
      {currentView === 'client' && clientViewCustomer && (
-       <div className="fixed inset-0 bg-gradient-to-br from-red-50 to-yellow-50 z-50">
-         <div className="min-h-screen flex items-center justify-center p-4">
-           <div className="bg-white rounded-2xl shadow-xl p-8 max-w-lg w-full">
-             <div className="text-center mb-6">
-               <h1 className="text-3xl font-extrabold text-red-800 mb-2 tracking-wider">Acril-Card</h1>
-               <p className="text-gray-600">¡Gracias por ser nuestro cliente!</p>
+       <div className="fixed inset-0 bg-gradient-to-br from-red-50 to-yellow-50 z-50 flex items-center justify-center p-4">
+         <div className="w-full max-w-md">
+           <div className="bg-gradient-to-br from-red-800 to-yellow-600 rounded-2xl shadow-xl p-8 text-center text-white border-4 border-yellow-500">
+             {/* Encabezado */}
+             <div className="mb-8">
+               <h1 className="text-5xl font-extrabold text-white mb-3 tracking-tight">ACRILCARD</h1>
+               <h2 className="text-2xl font-semibold text-black">{clientViewCustomer.name}</h2>
              </div>
              
-             <CustomerLoyaltyCard customer={clientViewCustomer} />
+             {/* Contador de sellos */}
+             <div className="bg-white bg-opacity-10 backdrop-blur-sm rounded-xl p-5 mb-8 border border-yellow-400 border-opacity-30">
+               <p className="text-yellow-200 text-lg font-medium mb-1">Sellos Acumulados</p>
+               <p className="text-5xl font-bold text-white">{clientViewCustomer.stamps}</p>
+             </div>
              
-             <div className="mt-8 text-center">
-               <div className="bg-gray-50 p-4 rounded-lg mb-4">
-                 <h3 className="font-semibold text-gray-800 mb-2">Información del Cliente</h3>
-                 <p className="text-sm text-gray-600">Teléfono: {clientViewCustomer.phone}</p>
-                 <p className="text-sm text-gray-600">Miembro desde: {clientViewCustomer.joinDate}</p>
-                 {clientViewCustomer.lastPurchase && (
-                   <p className="text-sm text-gray-600">Última compra: {clientViewCustomer.lastPurchase}</p>
-                 )}
+             {/* Barra de progreso de sellos */}
+             <div className="mb-8">
+               <div className="flex justify-between text-yellow-100 text-sm mb-2">
+                 <span>Progreso</span>
+                 <span className="font-semibold">{clientViewCustomer.stamps % stampsPerReward} / {stampsPerReward}</span>
+               </div>
+               <div className="w-full bg-black bg-opacity-20 rounded-full h-3 overflow-hidden">
+                 <div 
+                   className="bg-yellow-400 h-full rounded-full transition-all duration-500"
+                   style={{ width: `${(clientViewCustomer.stamps % stampsPerReward / stampsPerReward) * 100}%` }}
+                 ></div>
                </div>
              </div>
+             
+             {/* Sellos visuales */}
+             <div className="mb-8">
+               <p className="text-yellow-200 text-sm font-medium mb-3">Tus sellos</p>
+               <div className="grid grid-cols-5 gap-3">
+                 {[...Array(stampsPerReward)].map((_, i) => {
+                   const hasStamp = i < (clientViewCustomer.stamps % stampsPerReward);
+                   return (
+                     <div 
+                       key={i}
+                       className={`h-12 rounded-lg flex items-center justify-center text-2xl transition-all duration-300 ${hasStamp ? 'bg-yellow-400 text-yellow-800 transform scale-105' : 'bg-white bg-opacity-10 border-2 border-dashed border-yellow-400 border-opacity-30'}`}
+                     >
+                       {hasStamp ? '✪' : '○'}
+                     </div>
+                   );
+                 })}
+               </div>
+             </div>
+             
+             {/* Notificación de premio disponible */}
+             {Math.floor(clientViewCustomer.stamps / stampsPerReward) > 0 && (
+               <div className="bg-yellow-100 bg-opacity-90 text-yellow-800 p-4 rounded-lg border border-yellow-300 flex items-start space-x-3">
+                 <Gift className="w-6 h-6 text-yellow-600 mt-0.5 flex-shrink-0" />
+                 <div>
+                   <p className="font-bold text-lg">¡Felicidades!</p>
+                   <p className="font-medium">Tienes {Math.floor(clientViewCustomer.stamps / stampsPerReward)} premio(s) disponible(s)</p>
+                 </div>
+               </div>
+             )}
            </div>
          </div>
        </div>
