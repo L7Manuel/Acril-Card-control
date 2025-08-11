@@ -264,6 +264,24 @@ Si necesitas ayuda o tienes preguntas:
 - Abre un [issue](https://github.com/tu-usuario/Acril-Card-control/issues) en GitHub
 - Envía un correo a soporte@ejemplo.com
 
+## Registro de Cambios (CHANGELOG)
+
+### [1.0.1] - 2025-08-11
+#### Corregido
+- **Error de inicialización**: Se solucionó el error "Cannot access 'generateCustomerCode' before initialization" que ocurría al cargar la aplicación.
+  - Se movió la función `generateCustomerCode` dentro del componente principal.
+  - Se implementó `useCallback` para optimizar el rendimiento.
+  - Se mejoró el manejo de casos límite en la generación de códigos de cliente.
+  - Se actualizaron las dependencias de los hooks para evitar referencias circulares.
+
+#### Mejorado
+- **Robustez**: Se agregó manejo de errores para valores nulos o indefinidos en la generación de códigos.
+- **Documentación**: Se actualizó el registro de cambios para mantener un mejor seguimiento de las modificaciones.
+
+### [1.0.0] - 2025-08-10
+#### Lanzamiento Inicial
+- Versión inicial del sistema de fidelización digital.
+
 ## Reconocimientos
 
 - [React](https://reactjs.org/) - Biblioteca de JavaScript para interfaces de usuario

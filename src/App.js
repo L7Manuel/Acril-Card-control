@@ -1,5 +1,9 @@
-import React, { useState, useEffect, useCallback, useMemo, useContext } from 'react';
-import { User, Gift, Plus, Search, Award, ShoppingBag, Calendar, Trash2, Copy, Star, X, AlertCircle } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useMemo, useContext, useRef } from 'react';
+import { 
+  User, Gift, Plus, Search, Award, ShoppingBag, Calendar, 
+  Trash2, Copy, Star, X, AlertCircle, RefreshCw 
+} from 'lucide-react';
+import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 
 // Importar componentes comunes
 import { InputField, Button } from './components/common';
@@ -8,58 +12,232 @@ import { InputField, Button } from './components/common';
 import CustomerLoyaltyCard from './components/CustomerLoyaltyCard';
 
 // Importar contexto de notificaciones
-import { NotificationProvider, NotificationContext } from './contexts/NotificationContext';
+import { NotificationProvider, useNotification } from './contexts/NotificationContext';
+
+// Componente de navegación
+const Navigation = () => (
+  <nav className="bg-white shadow-lg">
+    <div className="max-w-7xl mx-auto px-4">
+      <div className="flex justify-between h-16">
+        <div className="flex">
+          <Link to="/" className="flex-shrink-0 flex items-center">
+            <Gift className="h-8 w-8 text-yellow-500" />
+            <span className="ml-2 text-xl font-bold text-gray-800">AcrilCard</span>
+          </Link>
+        </div>
+      </div>
+    </div>
+  </nav>
+);
+
+
 
 const LoyaltyCardSystem = () => {
+  // Función para generar código de cliente único basado en nombre y cédula
+  // Formato: Primera letra del nombre + últimos 3 dígitos de la cédula + número secuencial si es necesario
+  // Ejemplo: "Manuel Sanchez" con cédula "V-24974393" -> "M974" o "M974-1" si ya existe
+  const generateCustomerCode = useCallback((idType, idNumber, name = '', existingCustomers = []) => {
+    // Obtener la primera letra del primer nombre en mayúscula
+    const firstLetter = (name || '').trim().charAt(0).toUpperCase() || 'C';
+    
+    // Obtener los últimos 3 dígitos de la cédula o usar '000' si no hay
+    const lastThreeDigits = idNumber ? idNumber.toString().replace(/\D/g, '').slice(-3) : '000';
+    
+    // Crear el código base
+    let baseCode = `${firstLetter}${lastThreeDigits}`;
+    let code = baseCode;
+    let counter = 1;
+    
+    // Verificar si el código ya existe en los clientes existentes
+    const codeExists = (codeToCheck) => {
+      return existingCustomers.some(customer => customer.code === codeToCheck);
+    };
+    
+    // Si el código ya existe, agregar un número secuencial
+    while (codeExists(code) && existingCustomers.length > 0) {
+      code = `${baseCode}-${counter}`;
+      counter++;
+    }
+    
+    return code;
+  }, []);
   // Usar el contexto de notificaciones
-  const { showError, showSuccess } = useContext(NotificationContext);
- // Estados principales
- const [customers, setCustomers] = useState([]);
- 
- const [selectedCustomer, setSelectedCustomer] = useState(null);
- const [searchTerm, setSearchTerm] = useState('');
- const [showAddCustomer, setShowAddCustomer] = useState(false);
- const [newCustomer, setNewCustomer] = useState({ 
-   name: '', 
-   phone: '', 
-   idType: 'V', // V: V- Venezolano, E: E- Extranjero, J: J- Jurídico
-   idNumber: '' // Número de identificación (sin la letra inicial)
- });
- const [stampsPerReward, setStampsPerReward] = useState(10);
- const [currentView, setCurrentView] = useState('admin');
- const [clientViewCustomer, setClientViewCustomer] = useState(null);
- const [errors, setErrors] = useState({});
- const [notification, setNotification] = useState(null);
- const [loading, setLoading] = useState(false);
+  const { showError, showSuccess } = useNotification();
+  // Estados principales
+  const [customers, setCustomers] = useState([]);
+  const [selectedCustomer, setSelectedCustomer] = useState(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [showAddCustomer, setShowAddCustomer] = useState(false);
+  const [newCustomer, setNewCustomer] = useState({ 
+    name: '', 
+    phone: '', 
+    idType: 'V', // V: V- Venezolano, E: E- Extranjero, J: J- Jurídico
+    idNumber: '' // Número de identificación (sin la letra inicial)
+  });
+  const [stampsPerReward, setStampsPerReward] = useState(10);
+  const [currentView, setCurrentView] = useState('admin');
+  const [clientViewCustomer, setClientViewCustomer] = useState(null);
+  const [errors, setErrors] = useState({});
+  const [notification, setNotification] = useState(null);
+  const [loading, setLoading] = useState(false);
 
   // Persistencia de clientes en localStorage
   const hasLoadedCustomers = React.useRef(false);
 
-  useEffect(() => {
-    const stored = localStorage.getItem('customers');
-    if (stored) {
-      try {
-        const parsed = JSON.parse(stored);
-        console.log('Clientes cargados desde localStorage', parsed);
-        setCustomers(parsed);
-        // Verificar parámetro ?customer inmediatamente tras cargar
-        const urlParams = new URLSearchParams(window.location.search);
-        const codeParam = urlParams.get('customer');
-        if (codeParam) {
-          const found = parsed.find(c => c.code === codeParam);
-          if (found) {
-            setCurrentView('client');
-            setClientViewCustomer(found);
-          }
+  // Función para actualizar los códigos de clientes existentes al nuevo formato
+  const migrateCustomerCodes = useCallback(() => {
+    setLoading(true);
+    try {
+      setCustomers(prevCustomers => {
+        const updatedCustomers = prevCustomers.map(customer => {
+          // Generar nuevo código usando la función actual
+          const newCode = generateCustomerCode(
+            customer.idType || 'V',
+            customer.idNumber || customer.cedula?.split('-')[1] || '00000000',
+            customer.name,
+            [] // No verificar duplicados aquí para evitar conflictos
+          );
+          
+          return {
+            ...customer,
+            code: newCode
+          };
+        });
+        
+        // Guardar los cambios en localStorage
+        localStorage.setItem('customers', JSON.stringify(updatedCustomers));
+        showSuccess('Códigos de clientes actualizados correctamente');
+        return updatedCustomers;
+      });
+    } catch (error) {
+      console.error('Error al migrar códigos:', error);
+      showError('Error al actualizar los códigos de clientes');
+    } finally {
+      setLoading(false);
+    }
+  }, [showError, showSuccess]); // generateCustomerCode ya no es necesario aquí porque está definido con useCallback
+
+  // Función para migrar datos antiguos al nuevo formato
+  const migrateOldCustomers = (savedCustomers) => {
+    if (!Array.isArray(savedCustomers)) return [];
+    
+    return savedCustomers.map(customer => {
+      // Si ya tiene idType e idNumber válidos, retornar sin cambios
+      if (customer.idType && customer.idNumber) {
+        // Asegurarse de que idType sea una letra válida (V, E, J)
+        const validIdType = ['V', 'E', 'J'].includes(customer.idType.toUpperCase()) 
+          ? customer.idType.toUpperCase() 
+          : 'V';
+          
+        return {
+          ...customer,
+          idType: validIdType,
+          idNumber: customer.idNumber.replace(/[^0-9]/g, ''), // Solo números
+          cedula: customer.cedula || `${validIdType}-${customer.idNumber}`
+        };
+      }
+      
+      // Si tiene cedula en formato antiguo (ej: "V-12345678" o "V12345678")
+      if (customer.cedula) {
+        // Extraer tipo (V, E, J) y número de la cédula
+        const match = customer.cedula.match(/^([VEJvej])[-]?(\d+)$/);
+        
+        if (match) {
+          const idType = match[1].toUpperCase();
+          const idNumber = match[2];
+          
+          return {
+            ...customer,
+            idType,
+            idNumber,
+            cedula: `${idType}-${idNumber}` // Estandarizar formato
+          };
         }
-      } catch {
-        console.warn('Clientes corruptos en localStorage');
+        
+        // Si no coincide con el formato esperado pero tiene números, asumir V-
+        const numbers = customer.cedula.replace(/[^0-9]/g, '');
+        if (numbers) {
+          return {
+            ...customer,
+            idType: 'V',
+            idNumber: numbers,
+            cedula: `V-${numbers}`
+          };
+        }
+      }
+      
+      // Si no hay cedula o no se pudo extraer, usar valores por defecto
+      return {
+        ...customer,
+        idType: 'V',
+        idNumber: (customer.cedula || '').replace(/[^0-9]/g, '') || '00000000',
+        cedula: customer.cedula || `V-${(customer.cedula || '').replace(/[^0-9]/g, '') || '00000000'}`
+      };
+    });
+  };
+
+  // Efecto para cargar y migrar clientes
+  useEffect(() => {
+    const loadCustomers = () => {
+      try {
+        const stored = localStorage.getItem('customers');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          console.log('Datos originales del localStorage:', parsed);
+          
+          // Migrar clientes antiguos al nuevo formato
+          const migratedCustomers = migrateOldCustomers(parsed);
+          console.log('Clientes después de la migración:', migratedCustomers);
+          
+          setCustomers(migratedCustomers);
+          
+          // Guardar los datos migrados para futuras cargas
+          if (JSON.stringify(parsed) !== JSON.stringify(migratedCustomers)) {
+            localStorage.setItem('customers', JSON.stringify(migratedCustomers));
+            console.log('Datos migrados guardados en localStorage');
+          }
+          
+          // Verificar parámetro ?customer inmediatamente tras cargar
+          const urlParams = new URLSearchParams(window.location.search);
+          const codeParam = urlParams.get('customer');
+          if (codeParam) {
+            const found = migratedCustomers.find(c => c.code === codeParam);
+            if (found) {
+              setCurrentView('client');
+              setClientViewCustomer(found);
+            }
+          }
+          
+          hasLoadedCustomers.current = true;
+        } else {
+          // No hay clientes guardados, inicializar con array vacío
+          console.log('No se encontraron clientes en localStorage');
+          setCustomers([]);
+          hasLoadedCustomers.current = true;
+        }
+      } catch (error) {
+        console.error('Error al cargar o migrar clientes:', error);
         // Si hay un error, inicializar con un array vacío
         setCustomers([]);
+        hasLoadedCustomers.current = true;
+        
+        // Mostrar notificación de error al usuario
+        setNotification({
+          type: 'error',
+          message: 'Error al cargar los datos de clientes. Se ha reinicializado la lista.'
+        });
       }
-    }
-    hasLoadedCustomers.current = true;
-  }, []);
+    };
+
+    // Forzar recarga de clientes
+    hasLoadedCustomers.current = false;
+    loadCustomers();
+    
+    // Limpiar para futuras recargas
+    return () => {
+      hasLoadedCustomers.current = true;
+    };
+  }, [migrateOldCustomers, setNotification]);
 
   useEffect(() => {
     if (hasLoadedCustomers.current && customers.length > 0) {
@@ -82,16 +260,7 @@ const LoyaltyCardSystem = () => {
     setNotification(null);
   }, []);
 
- // Función mejorada para generar código único
- const generateCustomerCode = useCallback((idType, idNumber) => {
-   // Usamos el tipo de identificación y el número para generar un hash único
-   const input = `${idType}${idNumber}`;
-   const hash = input.split('').reduce((a, b) => {
-     a = ((a << 5) - a) + b.charCodeAt(0);
-     return a & a;
-   }, 0);
-   return `LC${idType}${Math.abs(hash).toString().slice(0, 6).padStart(6, '0')}`;
- }, []);
+
 
  // Funciones de validación
  const validateCustomer = useCallback((customer) => {
@@ -157,7 +326,12 @@ useEffect(() => {
 
    setLoading(true);
    try {
-     const customerCode = generateCustomerCode(newCustomer.idType, newCustomer.idNumber);
+     const customerCode = generateCustomerCode(
+       newCustomer.idType, 
+       newCustomer.idNumber, 
+       newCustomer.name,
+       customers // Pasar la lista actual de clientes para verificar duplicados
+     );
      const customer = {
        id: Date.now(),
        ...newCustomer,
@@ -429,6 +603,22 @@ useEffect(() => {
                <div className="text-sm bg-white/20 px-3 py-1 rounded-full">
                  {customers.length} cliente{customers.length !== 1 ? 's' : ''}
                </div>
+               <div className="relative group">
+                 <button
+                   onClick={migrateCustomerCodes}
+                   disabled={loading}
+                   className="text-xs bg-yellow-500 hover:bg-yellow-600 text-black font-bold py-1 px-2 rounded-full flex items-center space-x-1 transition-colors"
+                   title="Actualizar códigos de clientes al nuevo formato"
+                 >
+                   <RefreshCw className="w-3 h-3" />
+                   <span>Actualizar Códigos</span>
+                 </button>
+                 <div className="absolute right-0 mt-1 w-48 bg-white text-gray-800 text-xs rounded shadow-lg py-1 z-10 hidden group-hover:block">
+                   <div className="px-3 py-2">
+                     Actualiza los códigos de todos los clientes al nuevo formato: Letra + 3 dígitos
+                   </div>
+                 </div>
+               </div>
              </div>
            </div>
          </div>
@@ -501,7 +691,7 @@ useEffect(() => {
                          <h3 className="font-semibold text-gray-800">{customer.name}</h3>
                          <p className="text-sm text-gray-600">{customer.phone}</p>
                          <p className="text-xs text-gray-500">
-                           {customer.idType}-{customer.idNumber}
+                           {customer.idType} - {customer.idNumber}
                          </p>
                          <p className="text-xs text-yellow-600 font-semibold">Código: {customer.code}</p>
                        </div>
@@ -544,7 +734,7 @@ useEffect(() => {
                        <h2 className="text-2xl font-bold text-gray-800">{selectedCustomer.name}</h2>
                        <p className="text-gray-600">{selectedCustomer.phone}</p>
                        <p className="text-gray-600 text-sm">
-                         {selectedCustomer.idType}-{selectedCustomer.idNumber}
+                         {selectedCustomer.idType} - {selectedCustomer.idNumber}
                        </p>
                        <p className="text-yellow-600 font-semibold text-sm">Código: {selectedCustomer.code}</p>
                      </div>
@@ -845,22 +1035,6 @@ useEffect(() => {
  );
 };
 
-// Importar componentes de enrutamiento
-import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
-import TestErrorHandling from './pages/TestErrorHandling';
-
-// Componente de navegación simplificado
-const Navigation = () => (
-  <nav className="bg-gray-800 p-4">
-    <div className="max-w-7xl mx-auto px-4">
-      <div className="flex justify-center">
-        <Link to="/" className="text-white font-semibold text-xl">
-          AcrilCard - Sistema de Fidelización
-        </Link>
-      </div>
-    </div>
-  </nav>
-);
 
 // Envolver la aplicación con el NotificationProvider y el Router
 const App = () => {
@@ -871,7 +1045,6 @@ const App = () => {
           <Navigation />
           <main>
             <Routes>
-              <Route path="/test-errors" element={<TestErrorHandling />} />
               <Route path="/" element={<LoyaltyCardSystem />} />
             </Routes>
           </main>
