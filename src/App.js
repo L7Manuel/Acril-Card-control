@@ -19,7 +19,12 @@ const LoyaltyCardSystem = () => {
  const [selectedCustomer, setSelectedCustomer] = useState(null);
  const [searchTerm, setSearchTerm] = useState('');
  const [showAddCustomer, setShowAddCustomer] = useState(false);
- const [newCustomer, setNewCustomer] = useState({ name: '', phone: '', cedula: '' });
+ const [newCustomer, setNewCustomer] = useState({ 
+   name: '', 
+   phone: '', 
+   idType: 'V', // V: V- Venezolano, E: E- Extranjero, J: J- Jurídico
+   idNumber: '' // Número de identificación (sin la letra inicial)
+ });
  const [stampsPerReward, setStampsPerReward] = useState(10);
  const [currentView, setCurrentView] = useState('admin');
  const [clientViewCustomer, setClientViewCustomer] = useState(null);
@@ -78,12 +83,14 @@ const LoyaltyCardSystem = () => {
   }, []);
 
  // Función mejorada para generar código único
- const generateCustomerCode = useCallback((cedula) => {
-   const hash = cedula.split('').reduce((a, b) => {
+ const generateCustomerCode = useCallback((idType, idNumber) => {
+   // Usamos el tipo de identificación y el número para generar un hash único
+   const input = `${idType}${idNumber}`;
+   const hash = input.split('').reduce((a, b) => {
      a = ((a << 5) - a) + b.charCodeAt(0);
      return a & a;
    }, 0);
-   return `LC${Math.abs(hash).toString().padStart(6, '0')}`;
+   return `LC${idType}${Math.abs(hash).toString().slice(0, 6).padStart(6, '0')}`;
  }, []);
 
  // Funciones de validación
@@ -102,10 +109,10 @@ const LoyaltyCardSystem = () => {
      newErrors.phone = 'El teléfono debe tener entre 8 y 15 dígitos';
    }
    
-   if (!customer.cedula.trim()) {
-     newErrors.cedula = 'La cédula es requerida';
-   } else if (!/^\d{6,12}$/.test(customer.cedula)) {
-     newErrors.cedula = 'La cédula debe tener entre 6 y 12 dígitos';
+   if (!customer.idNumber.trim()) {
+     newErrors.idNumber = 'El número de identificación es requerido';
+   } else if (!/^[0-9]{6,12}$/.test(customer.idNumber)) {
+     newErrors.idNumber = 'El número debe tener entre 6 y 12 dígitos';
    }
    
    return newErrors;
@@ -138,21 +145,26 @@ useEffect(() => {
      return;
    }
    
-   const existingCustomer = customers.find(c => c.cedula === newCustomer.cedula);
+   // Verificar si ya existe un cliente con el mismo tipo y número de identificación
+   const existingCustomer = customers.find(c => 
+     c.idType === newCustomer.idType && c.idNumber === newCustomer.idNumber
+   );
+   
    if (existingCustomer) {
-     setErrors({ cedula: 'Ya existe un cliente con esta cédula' });
+     setErrors({ idNumber: 'Ya existe un cliente con este número de identificación' });
      return;
    }
 
    setLoading(true);
    try {
-     const customerCode = generateCustomerCode(newCustomer.cedula);
+     const customerCode = generateCustomerCode(newCustomer.idType, newCustomer.idNumber);
      const customer = {
        id: Date.now(),
        ...newCustomer,
        name: newCustomer.name.trim(),
        phone: newCustomer.phone.replace(/\s|-/g, ''),
-       cedula: newCustomer.cedula.trim(),
+       cedula: `${newCustomer.idType}-${newCustomer.idNumber}`, // Guardamos el formato completo para compatibilidad
+       idNumber: newCustomer.idNumber.trim(),
        code: customerCode,
        stamps: 0,
        totalPurchases: 0,
@@ -488,7 +500,9 @@ useEffect(() => {
                        <div>
                          <h3 className="font-semibold text-gray-800">{customer.name}</h3>
                          <p className="text-sm text-gray-600">{customer.phone}</p>
-                         <p className="text-xs text-gray-500">Cédula: {customer.cedula}</p>
+                         <p className="text-xs text-gray-500">
+                           {customer.idType}-{customer.idNumber}
+                         </p>
                          <p className="text-xs text-yellow-600 font-semibold">Código: {customer.code}</p>
                        </div>
                        <div className="text-right">
@@ -529,7 +543,9 @@ useEffect(() => {
                      <div>
                        <h2 className="text-2xl font-bold text-gray-800">{selectedCustomer.name}</h2>
                        <p className="text-gray-600">{selectedCustomer.phone}</p>
-                       <p className="text-gray-600 text-sm">Cédula: {selectedCustomer.cedula}</p>
+                       <p className="text-gray-600 text-sm">
+                         {selectedCustomer.idType}-{selectedCustomer.idNumber}
+                       </p>
                        <p className="text-yellow-600 font-semibold text-sm">Código: {selectedCustomer.code}</p>
                      </div>
                    </div>
@@ -668,7 +684,12 @@ useEffect(() => {
                onClick={() => {
                  setShowAddCustomer(false);
                  setErrors({});
-                 setNewCustomer({ name: '', phone: '', cedula: '' });
+                 setNewCustomer({ 
+                   name: '', 
+                   phone: '', 
+                   idType: 'V',
+                   idNumber: '' 
+                 });
                }}
                className="text-gray-500 hover:text-gray-700"
              >
@@ -693,13 +714,43 @@ useEffect(() => {
                error={errors.phone}
              />
              
-             <InputField
-               type="text"
-               placeholder="Cédula *"
-               value={newCustomer.cedula}
-               onChange={(e) => setNewCustomer(prev => ({ ...prev, cedula: e.target.value }))}
-               error={errors.cedula}
-             />
+             <div className="space-y-1">
+               <label className="block text-sm font-medium text-gray-700">Identificación *</label>
+               <div className="flex space-x-2">
+                 <div className="w-16">
+                   <select
+                     value={newCustomer.idType}
+                     onChange={(e) => setNewCustomer(prev => ({ ...prev, idType: e.target.value }))}
+                     className="w-full h-10 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 text-gray-900 text-sm"
+                   >
+                     <option value="V">V</option>
+                     <option value="E">E</option>
+                     <option value="J">J</option>
+                   </select>
+                 </div>
+                 <div className="flex-1">
+                   <div>
+                     <input
+                       type="text"
+                       placeholder="Número de identificación"
+                       value={newCustomer.idNumber}
+                       onChange={(e) => {
+                         // Solo permitir números
+                         const value = e.target.value.replace(/[^0-9]/g, '');
+                         setNewCustomer(prev => ({ ...prev, idNumber: value }));
+                       }}
+                       className="w-full h-10 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-transparent text-sm"
+                     />
+                     {errors.idNumber && (
+                       <p className="text-red-500 text-xs mt-1">{errors.idNumber}</p>
+                     )}
+                   </div>
+                 </div>
+               </div>
+               {errors.idNumber && (
+                 <p className="mt-1 text-sm text-red-600">{errors.idNumber}</p>
+               )}
+             </div>
              
              <div className="flex space-x-3 pt-4">
                <Button
