@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useCallback, useMemo, useContext, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useContext, useRef, useLayoutEffect } from 'react';
 import { 
   User, Gift, Plus, Search, Award, ShoppingBag, Calendar, 
-  Trash2, Copy, Star, X, AlertCircle, RefreshCw 
+  Trash2, Copy, Star, X, AlertCircle, RefreshCw, Minus 
 } from 'lucide-react';
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 
@@ -32,36 +32,75 @@ const Navigation = () => (
 
 
 
+// Hook personalizado para manejar eventos de scroll con passive: true
+const usePassiveScroll = (ref, handler) => {
+  useEffect(() => {
+    if (!ref.current) return;
+    
+    const element = ref.current;
+    
+    // Configuración para el event listener pasivo
+    const options = {
+      passive: true,
+      capture: false
+    };
+    
+    // Agregar el event listener pasivo
+    element.addEventListener('scroll', handler, options);
+    
+    // Limpieza al desmontar
+    return () => {
+      element.removeEventListener('scroll', handler, options);
+    };
+  }, [ref, handler]);
+};
+
 const LoyaltyCardSystem = () => {
   // Función para generar código de cliente único basado en nombre y cédula
   // Formato: Primera letra del nombre + últimos 3 dígitos de la cédula + número secuencial si es necesario
-  // Ejemplo: "Manuel Sanchez" con cédula "V-24974393" -> "M974" o "M974-1" si ya existe
-  const generateCustomerCode = useCallback((idType, idNumber, name = '', existingCustomers = []) => {
-    // Obtener la primera letra del primer nombre en mayúscula
-    const firstLetter = (name || '').trim().charAt(0).toUpperCase() || 'C';
-    
-    // Obtener los últimos 3 dígitos de la cédula o usar '000' si no hay
-    const lastThreeDigits = idNumber ? idNumber.toString().replace(/\D/g, '').slice(-3) : '000';
-    
-    // Crear el código base
-    let baseCode = `${firstLetter}${lastThreeDigits}`;
-    let code = baseCode;
-    let counter = 1;
-    
-    // Verificar si el código ya existe en los clientes existentes
-    const codeExists = (codeToCheck) => {
-      return existingCustomers.some(customer => customer.code === codeToCheck);
+  // Ejemplo: "Manuel Sanchez" con cédula "V-24974393" -> "M974" o "M974-1"  // Generar código de cliente (memoizado para evitar recreaciones innecesarias)
+  const generateCustomerCode = useMemo(() => {
+    return (idType, idNumber, name, existingCustomers = []) => {
+      // Validar que los parámetros no sean nulos o indefinidos
+      if (!idType || !idNumber || !name) {
+        console.error('Error: Parámetros inválidos para generar el código');
+        return 'ERROR-CODE';
+      }
+
+      try {
+        // Tomar las primeras 3 letras del nombre en mayúsculas
+        const namePrefix = name.trim().toUpperCase().substring(0, 3);
+        
+        // Tomar el tipo de identificación (V, E, J, etc.)
+        const idPrefix = idType.toUpperCase();
+        
+        // Tomar los últimos 4 dígitos de la cédula
+        const idSuffix = idNumber.toString().slice(-4);
+        
+        // Combinar todo
+        let code = `${idPrefix}${namePrefix}${idSuffix}`;
+        
+        // Verificar si el código ya existe
+        let isDuplicate = existingCustomers.some(customer => customer.code === code);
+        let counter = 1;
+        
+        // Si el código ya existe, añadir un número al final
+        while (isDuplicate) {
+          code = `${idPrefix}${namePrefix}${idSuffix}-${counter}`;
+          isDuplicate = existingCustomers.some(customer => customer.code === code);
+          counter++;
+          
+          // Prevenir bucles infinitos
+          if (counter > 100) break;
+        }
+        
+        return code;
+      } catch (error) {
+        console.error('Error al generar el código de cliente:', error);
+        return 'ERROR-CODE';
+      }
     };
-    
-    // Si el código ya existe, agregar un número secuencial
-    while (codeExists(code) && existingCustomers.length > 0) {
-      code = `${baseCode}-${counter}`;
-      counter++;
-    }
-    
-    return code;
-  }, []);
-  // Usar el contexto de notificaciones
+  }, []); // Usar el contexto de notificaciones
   const { showError, showSuccess } = useNotification();
   // Estados principales
   const [customers, setCustomers] = useState([]);
@@ -77,8 +116,17 @@ const LoyaltyCardSystem = () => {
   const [stampsPerReward, setStampsPerReward] = useState(10);
   const [currentView, setCurrentView] = useState('admin');
   const [clientViewCustomer, setClientViewCustomer] = useState(null);
+  const [showClientView, setShowClientView] = useState(false);
   const [errors, setErrors] = useState({});
+  const historyContainerRef = useRef(null);
   const [notification, setNotification] = useState(null);
+  
+  // Usar el hook de scroll pasivo para  // Efecto para manejar el scroll pasivo
+  const handleScroll = useCallback(() => {
+    // Lógica de scroll si es necesaria
+  }, []);
+  
+  usePassiveScroll(historyContainerRef, handleScroll);
   const [loading, setLoading] = useState(false);
 
   // Persistencia de clientes en localStorage
@@ -363,78 +411,205 @@ useEffect(() => {
    } finally {
      setLoading(false);
    }
- }, [newCustomer, customers, generateCustomerCode, validateCustomer]);
+ }, [newCustomer, customers, generateCustomerCode, validateCustomer, showSuccess, showError]);
 
- const addStamp = useCallback((customerId, purchaseAmount = 0) => {
-   setLoading(true);
-   try {
-     setCustomers(prev => prev.map(customer => {
-       if (customer.id === customerId) {
-         const newStamps = customer.stamps + 1;
-         const newRewards = Math.floor(newStamps / stampsPerReward);
-         
-         const purchase = {
-           id: Date.now(),
-           date: new Date().toLocaleDateString(),
-           amount: purchaseAmount,
-           stampNumber: newStamps
-         };
+  // Función optimizada para actualizar clientes
+  const updateCustomer = useCallback((customerId, updateFn) => {
+    // Usar una referencia para evitar dependencias en useCallback
+    const currentSelectedCustomer = selectedCustomer;
+    
+    setCustomers(prev => {
+      const updatedCustomers = prev.map(customer => {
+        if (customer.id === customerId) {
+          const updatedCustomer = updateFn(customer);
+          
+          // Actualizar cliente seleccionado si es el mismo
+          if (currentSelectedCustomer?.id === customerId) {
+            // Usar requestIdleCallback para una actualización más eficiente
+            if (typeof window !== 'undefined' && window.requestIdleCallback) {
+              window.requestIdleCallback(
+                () => {
+                  const { stamps, totalPurchases, rewardsEarned, purchaseHistory, lastPurchase } = updatedCustomer;
+                  setSelectedCustomer(prev => ({
+                    ...prev,
+                    stamps,
+                    totalPurchases,
+                    rewardsEarned,
+                    purchaseHistory,
+                    lastPurchase
+                  }));
+                },
+                { timeout: 100 } // Tiempo máximo de espera
+              );
+            } else {
+              // Fallback para navegadores que no soportan requestIdleCallback
+              requestAnimationFrame(() => {
+                const { stamps, totalPurchases, rewardsEarned, purchaseHistory, lastPurchase } = updatedCustomer;
+                setSelectedCustomer(prev => ({
+                  ...prev,
+                  stamps,
+                  totalPurchases,
+                  rewardsEarned,
+                  purchaseHistory,
+                  lastPurchase
+                }));
+              });
+            }
+          }
+          
+          return updatedCustomer;
+        }
+        return customer;
+      });
+      
+      // Usar requestIdleCallback para guardar en localStorage sin bloquear
+      const saveToLocalStorage = () => {
+        try {
+          localStorage.setItem('customers', JSON.stringify(updatedCustomers));
+        } catch (error) {
+          console.error('Error al guardar en localStorage:', error);
+        }
+      };
+      
+      if (typeof window !== 'undefined' && window.requestIdleCallback) {
+        window.requestIdleCallback(saveToLocalStorage, { timeout: 500 });
+      } else {
+        // Fallback para navegadores que no soportan requestIdleCallback
+        setTimeout(saveToLocalStorage, 0);
+      }
+      
+      return updatedCustomers;
+    });
+  }, []); // Eliminamos la dependencia de selectedCustomer
 
-         const updatedCustomer = {
-           ...customer,
-           stamps: newStamps,
-           totalPurchases: customer.totalPurchases + 1,
-           lastPurchase: new Date().toLocaleDateString(),
-           rewardsEarned: newRewards,
-           purchaseHistory: [...customer.purchaseHistory, purchase]
-         };
+  // Agregar sello - versión simplificada y corregida
+  const addStamp = useCallback((customerId, purchaseAmount = 0) => {
+    setLoading(true);
+    try {
+      setCustomers(prev => {
+        const updated = prev.map(customer => {
+          if (customer.id === customerId) {
+            const newStamps = customer.stamps + 1;
+            const newRewards = Math.floor(newStamps / stampsPerReward);
+            
+            const purchase = {
+              id: Date.now() + Math.random(),
+              date: new Date().toLocaleDateString(),
+              amount: purchaseAmount,
+              stampNumber: newStamps
+            };
 
-         // Actualizar cliente seleccionado si es el mismo
-         if (selectedCustomer?.id === customerId) {
-           setSelectedCustomer(updatedCustomer);
-         }
+            const updatedCustomer = {
+              ...customer,
+              stamps: newStamps,
+              totalPurchases: customer.totalPurchases + 1,
+              lastPurchase: new Date().toLocaleDateString(),
+              rewardsEarned: newRewards,
+              purchaseHistory: [...customer.purchaseHistory, purchase]
+            };
 
-         return updatedCustomer;
-       }
-       return customer;
-     }));
-     
-     showSuccess('Sello agregado exitosamente');
-   } catch (error) {
-     showError('Error al agregar sello');
-   } finally {
-     setLoading(false);
-   }
- }, [stampsPerReward, selectedCustomer]);
+            // Actualizar cliente seleccionado si es el mismo
+            if (selectedCustomer?.id === customerId) {
+              setSelectedCustomer(updatedCustomer);
+            }
 
- const redeemReward = useCallback((customerId) => {
-   setLoading(true);
-   try {
-     setCustomers(prev => prev.map(customer => {
-       if (customer.id === customerId && customer.stamps >= stampsPerReward) {
-         const updatedCustomer = {
-           ...customer,
-           stamps: customer.stamps - stampsPerReward,
-           rewardsEarned: customer.rewardsEarned - 1
-         };
+            return updatedCustomer;
+          }
+          return customer;
+        });
+        
+        // Guardar en localStorage
+        localStorage.setItem('customers', JSON.stringify(updated));
+        return updated;
+      });
+      
+      showSuccess('Sello agregado exitosamente');
+    } catch (error) {
+      showError('Error al agregar sello');
+      console.error('Error en addStamp:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [stampsPerReward, selectedCustomer, showSuccess, showError]);
 
-         // Actualizar cliente seleccionado si es el mismo
-         if (selectedCustomer?.id === customerId) {
-           setSelectedCustomer(updatedCustomer);
-         }
+  // Quitar sello - versión simplificada y corregida
+  const removeStamp = useCallback((customerId) => {
+    setLoading(true);
+    try {
+      setCustomers(prev => {
+        const updated = prev.map(customer => {
+          if (customer.id === customerId && customer.stamps > 0) {
+            const newStamps = customer.stamps - 1;
+            const newRewards = Math.floor(newStamps / stampsPerReward);
+            
+            const updatedCustomer = {
+              ...customer,
+              stamps: newStamps,
+              totalPurchases: Math.max(0, customer.totalPurchases - 1),
+              rewardsEarned: newRewards,
+              purchaseHistory: customer.purchaseHistory.slice(0, -1)
+            };
 
-         return updatedCustomer;
-       }
-       return customer;
-     }));
-     
-     showSuccess('Premio canjeado exitosamente');
-   } catch (error) {
-     showError('Error al canjear premio');
-   } finally {
-     setLoading(false);
-   }
- }, [stampsPerReward, selectedCustomer]);
+            // Actualizar cliente seleccionado si es el mismo
+            if (selectedCustomer?.id === customerId) {
+              setSelectedCustomer(updatedCustomer);
+            }
+
+            return updatedCustomer;
+          }
+          return customer;
+        });
+        
+        // Guardar en localStorage
+        localStorage.setItem('customers', JSON.stringify(updated));
+        return updated;
+      });
+      
+      showSuccess('Sello eliminado correctamente');
+    } catch (error) {
+      showError('Error al quitar sello');
+      console.error('Error en removeStamp:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [stampsPerReward, selectedCustomer, showSuccess, showError]);
+
+  // Canjear premio - versión simplificada y corregida
+  const redeemReward = useCallback((customerId) => {
+    setLoading(true);
+    try {
+      setCustomers(prev => {
+        const updated = prev.map(customer => {
+          if (customer.id === customerId && customer.stamps >= stampsPerReward) {
+            const updatedCustomer = {
+              ...customer,
+              stamps: customer.stamps - stampsPerReward,
+              rewardsEarned: Math.max(0, customer.rewardsEarned - 1)
+            };
+
+            // Actualizar cliente seleccionado si es el mismo
+            if (selectedCustomer?.id === customerId) {
+              setSelectedCustomer(updatedCustomer);
+            }
+
+            return updatedCustomer;
+          }
+          return customer;
+        });
+        
+        // Guardar en localStorage
+        localStorage.setItem('customers', JSON.stringify(updated));
+        return updated;
+      });
+      
+      showSuccess('Premio canjeado exitosamente');
+    } catch (error) {
+      showError('Error al canjear premio');
+      console.error('Error en redeemReward:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [stampsPerReward, selectedCustomer, showSuccess, showError]);
 
  const deleteCustomer = useCallback((customerId) => {
   if (window.confirm('¿Estás seguro de eliminar este cliente? Esta acción no se puede deshacer.')) {
@@ -768,8 +943,11 @@ useEffect(() => {
                        <Award className="w-5 h-5 text-red-800" />
                        <span className="text-sm text-gray-600">Sellos actuales</span>
                      </div>
-                     <div className="text-2xl font-bold text-red-800">
-                       {selectedCustomer.stamps % stampsPerReward} / {stampsPerReward}
+                     <div className="text-2xl font-bold text-red-800 flex items-center">
+                       <span className="inline-block w-8 text-right">
+                         {selectedCustomer.stamps % stampsPerReward}
+                       </span>
+                       <span> / {stampsPerReward}</span>
                      </div>
                    </div>
                    <div className="bg-green-50 p-4 rounded-lg border border-green-200">
@@ -803,14 +981,26 @@ useEffect(() => {
 
                  {/* Acciones */}
                  <div className="flex space-x-3 mb-6">
-                   <Button
-                     variant="primary"
-                     onClick={() => addStamp(selectedCustomer.id)}
-                     loading={loading}
-                     className="flex-1 py-3"
-                   >
-                     {loading ? 'Agregando...' : 'Agregar Sello'}
-                   </Button>
+                   <div className="flex-1 flex space-x-2">
+                     <Button
+                       variant="primary"
+                       onClick={() => addStamp(selectedCustomer.id)}
+                       loading={loading}
+                       className="flex-1 py-3"
+                     >
+                       {loading ? 'Agregando...' : 'Agregar Sello'}
+                     </Button>
+                     <Button
+                       variant="danger"
+                       onClick={() => removeStamp(selectedCustomer.id)}
+                       disabled={selectedCustomer.stamps <= 0}
+                       loading={loading}
+                       className="py-3"
+                       title="Quitar último sello"
+                     >
+                       <Minus className="w-5 h-5" />
+                     </Button>
+                   </div>
                    {Math.floor(selectedCustomer.stamps / stampsPerReward) > 0 && (
                      <Button
                        variant="success"
@@ -826,7 +1016,15 @@ useEffect(() => {
                  {/* Historial de compras */}
                  <div>
                    <h3 className="text-lg font-semibold text-gray-800 mb-3">Historial de Compras</h3>
-                   <div className="max-h-64 overflow-y-auto space-y-2">
+                   <div 
+                     ref={historyContainerRef}
+                     className="max-h-64 overflow-y-auto space-y-2"
+                     style={{
+                       // Mejora el rendimiento del scroll
+                       willChange: 'transform',
+                       WebkitOverflowScrolling: 'touch',
+                     }}
+                   >
                      {selectedCustomer.purchaseHistory?.length > 0 ? (
                        selectedCustomer.purchaseHistory.slice().reverse().map((purchase) => (
                          <div key={purchase.id} className="bg-gray-50 p-3 rounded-lg flex justify-between items-center">
