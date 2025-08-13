@@ -57,12 +57,12 @@ const usePassiveScroll = (ref, handler) => {
 
 const LoyaltyCardSystem = () => {
   // Función para generar código de cliente único basado en nombre y cédula
-  // Formato: Primera letra del nombre + últimos 3 dígitos de la cédula + número secuencial si es necesario
-  // Ejemplo: "Manuel Sanchez" con cédula "V-24974393" -> "M974" o "M974-1"  // Generar código de cliente (memoizado para evitar recreaciones innecesarias)
+  // Formato: 3 primeras letras del nombre + últimos 4 dígitos de la cédula + número secuencial si es necesario
+  // Ejemplo: "Manuel Sanchez" con cédula "V-24974393" -> "MAN9743" o "MAN9743-1"
   const generateCustomerCode = useMemo(() => {
     return (idType, idNumber, name, existingCustomers = []) => {
       // Validar que los parámetros no sean nulos o indefinidos
-      if (!idType || !idNumber || !name) {
+      if (!idNumber || !name) {
         console.error('Error: Parámetros inválidos para generar el código');
         return 'ERROR-CODE';
       }
@@ -71,14 +71,17 @@ const LoyaltyCardSystem = () => {
         // Tomar las primeras 3 letras del nombre en mayúsculas
         const namePrefix = name.trim().toUpperCase().substring(0, 3);
         
-        // Tomar el tipo de identificación (V, E, J, etc.)
-        const idPrefix = idType.toUpperCase();
+        // Extraer solo los números de la cédula y tomar los últimos 4 dígitos
+        const numericId = idNumber.toString().replace(/\D/g, ''); // Elimina todo lo que no sea número
+        const idSuffix = numericId.slice(-4);
         
-        // Tomar los últimos 4 dígitos de la cédula
-        const idSuffix = idNumber.toString().slice(-4);
+        if (!idSuffix) {
+          console.error('Error: No se pudo extraer un número de identificación válido');
+          return 'ERROR-CODE';
+        }
         
-        // Combinar todo
-        let code = `${idPrefix}${namePrefix}${idSuffix}`;
+        // Combinar nombre y cédula
+        let code = `${namePrefix}${idSuffix}`;
         
         // Verificar si el código ya existe
         let isDuplicate = existingCustomers.some(customer => customer.code === code);
@@ -86,7 +89,7 @@ const LoyaltyCardSystem = () => {
         
         // Si el código ya existe, añadir un número al final
         while (isDuplicate) {
-          code = `${idPrefix}${namePrefix}${idSuffix}-${counter}`;
+          code = `${namePrefix}${idSuffix}-${counter}`;
           isDuplicate = existingCustomers.some(customer => customer.code === code);
           counter++;
           
@@ -224,79 +227,80 @@ const LoyaltyCardSystem = () => {
     });
   };
 
-  // Efecto para cargar y migrar clientes
+  // Efecto para cargar clientes al montar el componente
   useEffect(() => {
     const loadCustomers = () => {
       try {
         const stored = localStorage.getItem('customers');
         if (stored) {
           const parsed = JSON.parse(stored);
-          console.log('Datos originales del localStorage:', parsed);
           
-          // Migrar clientes antiguos al nuevo formato
-          const migratedCustomers = migrateOldCustomers(parsed);
-          console.log('Clientes después de la migración:', migratedCustomers);
+          // Migrar clientes antiguos al nuevo formato solo si es necesario
+          const needsMigration = parsed.some(c => c.code && (c.code.startsWith('V') || c.code.startsWith('E') || c.code.startsWith('J')));
           
-          setCustomers(migratedCustomers);
-          
-          // Guardar los datos migrados para futuras cargas
-          if (JSON.stringify(parsed) !== JSON.stringify(migratedCustomers)) {
+          if (needsMigration) {
+            const migratedCustomers = migrateOldCustomers(parsed).map(customer => {
+              // Generar nuevo código sin prefijo V/E/J
+              const newCode = generateCustomerCode(
+                customer.idType || 'V',
+                customer.idNumber || customer.cedula?.split('-')[1] || '00000000',
+                customer.name,
+                []
+              );
+              return { ...customer, code: newCode };
+            });
+            
+            setCustomers(migratedCustomers);
+            // Guardar los datos migrados
             localStorage.setItem('customers', JSON.stringify(migratedCustomers));
-            console.log('Datos migrados guardados en localStorage');
+          } else {
+            setCustomers(parsed);
           }
           
-          // Verificar parámetro ?customer inmediatamente tras cargar
+          // Verificar parámetro ?customer
           const urlParams = new URLSearchParams(window.location.search);
           const codeParam = urlParams.get('customer');
           if (codeParam) {
-            const found = migratedCustomers.find(c => c.code === codeParam);
+            const found = (needsMigration ? migratedCustomers : parsed).find(c => c.code === codeParam);
             if (found) {
               setCurrentView('client');
               setClientViewCustomer(found);
             }
           }
-          
-          hasLoadedCustomers.current = true;
-        } else {
-          // No hay clientes guardados, inicializar con array vacío
-          console.log('No se encontraron clientes en localStorage');
-          setCustomers([]);
-          hasLoadedCustomers.current = true;
         }
       } catch (error) {
-        console.error('Error al cargar o migrar clientes:', error);
-        // Si hay un error, inicializar con un array vacío
+        console.error('Error al cargar clientes:', error);
         setCustomers([]);
+        showError('Error al cargar los datos de clientes');
+      } finally {
         hasLoadedCustomers.current = true;
-        
-        // Mostrar notificación de error al usuario
-        setNotification({
-          type: 'error',
-          message: 'Error al cargar los datos de clientes. Se ha reinicializado la lista.'
-        });
       }
     };
 
-    // Forzar recarga de clientes
-    hasLoadedCustomers.current = false;
-    loadCustomers();
+    // Solo cargar si no se han cargado los clientes
+    if (!hasLoadedCustomers.current) {
+      loadCustomers();
+    }
     
-    // Limpiar para futuras recargas
     return () => {
-      hasLoadedCustomers.current = true;
+      hasLoadedCustomers.current = false;
     };
-  }, [migrateOldCustomers, setNotification]);
+  }, [migrateOldCustomers, showError]);
 
+  // Efecto para guardar cambios en localStorage
   useEffect(() => {
     if (hasLoadedCustomers.current && customers.length > 0) {
       try {
-        localStorage.setItem('customers', JSON.stringify(customers));
+        const prevCustomers = JSON.parse(localStorage.getItem('customers') || '[]');
+        if (JSON.stringify(prevCustomers) !== JSON.stringify(customers)) {
+          localStorage.setItem('customers', JSON.stringify(customers));
+        }
       } catch (error) {
         console.error('Error al guardar clientes en localStorage:', error);
-        showError('Error al guardar clientes en localStorage');
+        showError('Error al guardar los cambios');
       }
     }
-  }, [customers]);
+  }, [customers, showError]);
 
   // Función para mostrar notificaciones
   const showNotification = useCallback((message, type = 'success') => {
